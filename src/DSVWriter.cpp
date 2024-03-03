@@ -25,8 +25,8 @@ struct CDSVWriter::SImplementation
 };
 
 // Constructor (Initializes "CDSVWriter" Object)
-CDSVWriter::CDSVWriter(std::shared_ptr< CDataSink > sink, char delimiter, bool quoteall) 
-    : DImplementation(new SImplementation(sink,delimiter,quoteall)){}
+CDSVWriter::CDSVWriter(std::shared_ptr<CDataSink> sink, char delimiter, bool quoteall)
+    : DImplementation(std::make_unique<SImplementation>(sink, delimiter, quoteall)) {}
 
 // Destructor
 CDSVWriter::~CDSVWriter() = default;
@@ -35,44 +35,35 @@ CDSVWriter::~CDSVWriter() = default;
 
 bool CDSVWriter::WriteRow(const std::vector< std::string > &row)
 {
-    std::vector<std::string> ProRow;
-    std::string finalRow;
-    char quoteChar = '"';
-    bool needQuotes = false;
+    // '<<' operator used for stream operations
+    std::stringstream stream;
 
-    for (const auto& field : row) 
-    {
-        std::string current = field;
-        current = StringUtils::Replace(current, "\"", "\"\"");
+    // Iterates through each entry of vector
+    for (size_t i = 0; i < row.size(); i++)
+    {   
+        // Place Delimiter
+        if (i != 0) { stream << DImplementation->delimiter; }
 
-        // Determined by CDSVWriter class
-        if (DImplementation->quoteall) 
-        { needQuotes = true; }
+        std::string dataline = row[i];
 
-        else
-        {   
-            if (current.find(DImplementation->delimiter) != std::string::npos) { needQuotes = true; } // Check for delimiter in the string
-            else if (current.find('"') != std::string::npos) { needQuotes = true; } // Check for double quote in the string
-            else if (current.find('\n') != std::string::npos) { needQuotes = true; } // Check for newline in the string
+        // AI Generated Section
+        bool PutQuote = DImplementation->quoteall || 
+                        dataline.find(DImplementation->delimiter) != std::string::npos ||
+                        dataline.find('\"') != std::string::npos ||
+                        dataline.find('\n') != std::string::npos;
+        
+        if ( PutQuote )
+        {
+            stream << '\"';
+            // Add double quotes
+            for(char ch : dataline) { if (ch == '\"') { stream << "\"\""; } else{ stream << ch; } }
+            stream << '\"';
         }
-
-        if (needQuotes)
-        { current = quoteChar + current + quoteChar; }
-
-        ProRow.push_back(current);
+        else { stream << dataline; }
     }
 
-    // Join the processed fields using the delimiter
-    for (size_t i = 0; i < ProRow.size(); ++i) 
-    {
-        finalRow += ProRow[i];
-        if (i < ProRow.size() - 1) { finalRow += DImplementation->delimiter; }
-    }
-
-    // End the row with a newline character
-    finalRow += '\n';
-
-    // Convert finalRow to vector<char> and write to the data sink
-    std::vector<char> vec(finalRow.begin(), finalRow.end());
-    return DImplementation->sink->Write(vec);
+    // Write Line of Data to Sink
+    std::string out = stream.str();
+    if(out.back() == '\n'){ out.pop_back();}
+    return DImplementation->sink->Write(std::vector<char>(out.begin(), out.end()));
 }

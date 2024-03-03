@@ -3,7 +3,8 @@
 #include "BusSystem.h"
 #include <unordered_set>
 
-class CBusSystemIndexer{
+class CBusSystemIndexer
+{
     private:
         struct SImplementation;
         std::unique_ptr<SImplementation> DImplementation;

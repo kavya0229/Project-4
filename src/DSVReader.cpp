@@ -7,6 +7,7 @@
 #include <sstream>
 // Project Headers
 #include "StringUtils.h"
+//#include "DataSource.h"
 #include "DSVReader.h"
 //----------------------------------------------------------------------------
 
@@ -15,12 +16,14 @@ struct CDSVReader::SImplementation
 { 
     std::shared_ptr< CDataSource > src;
     char delimiter;
+    bool DataDone;
 
-    SImplementation(std::shared_ptr< CDataSource > src, char del_param) : src(src), delimiter(delimiter) {}
+    SImplementation(std::shared_ptr<CDataSource> src, char delimiter) : src(src), delimiter(delimiter) {}
 };
 
 // Constructor (Initializes "CDSVReader" Object)
-CDSVReader::CDSVReader(std::shared_ptr< CDataSource > src, char delimiter) : DImplementation(new SImplementation(src,delimiter)) {}
+CDSVReader::CDSVReader(std::shared_ptr< CDataSource > src, char delimiter) 
+    : DImplementation(new SImplementation(src,delimiter)) {}
 
 // Destructor
 CDSVReader::~CDSVReader() = default;
@@ -29,31 +32,42 @@ CDSVReader::~CDSVReader() = default;
 
 bool CDSVReader::ReadRow(std::vector< std::string > &row)
 {
-    std::string line;
-    char ch;
-    std::string del = "";
-    del = DImplementation->delimiter;
-    bool lineRead = false;
+    std::string unique_delimiter = std::string(1, DImplementation->delimiter) + "$3$%#&#$5";
+    std::string unique_quotes = "@$64#&$%32#";
+    std::string dataline;
+    bool quoted = true;
+    char ch, pk;
 
-    // Checks if all rows have been read
-    if(End()) { return false; }
-
-    // Reads first row of src char by char
-    while( DImplementation->src->Get(ch) ) 
+    // Place line of data on string to read in ReadRow()
+    while(DImplementation->src->Get(ch))
     {
-        if (ch == '\n') { lineRead = true; break; }  
-        else { line = line + ch; }
+        // Read next available char
+        DImplementation->DataDone = !DImplementation->src->Peek(pk);
+
+        // Ignore delimiters found within quotes
+        if (ch == '\n' ) { break; }
+        else if (ch == '"' && pk != '"' ) { quoted = !quoted; dataline.push_back(ch); }
+
+        // True delimiter (,) pushed along with ($3$5) to use (,$3$5) as the splt string for StringUtils()
+        else if ( ch == DImplementation->delimiter && quoted == true ) { dataline += unique_delimiter; }
+        
+        // Base Case
+        else { dataline.push_back(ch); }
     }
 
-    // Case 1: Splits values by delimiter
-    if ( lineRead ) { row = StringUtils::Split(line,del); return true; } 
+    // Replace double quotes (\"\") in dataline with single quote (\")
+    dataline = StringUtils::Replace(dataline, "\"\"", unique_quotes);
+    dataline = StringUtils::Replace(dataline, "\"", "" );
+    dataline = StringUtils::Replace(dataline, unique_quotes, "\"");
 
-    // Case 2: No character found
-    else { return false; }
+    // Split dataline by the slightly altered delimiter
+    row = StringUtils::Split(dataline, unique_delimiter);
+    
+    // Checks if any data was read
+    return !dataline.empty();
 }
 
+//----------------------------------------------------------------------------
 
 bool CDSVReader::End() const
-{   
-    return DImplementation->src->End();
-}
+{ return DImplementation->DataDone; }

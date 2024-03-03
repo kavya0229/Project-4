@@ -15,12 +15,78 @@
 struct CXMLWriter::SImplementation 
 {
     std::shared_ptr<CDataSink> sink;
-    SXMLEntity entity;
-    std::vector<std::string> OpenedElements;
 
-    // Constructor
-    SImplementation(std::shared_ptr<CDataSink> sink)
-        : sink(std::move(sink)) {}
+    SImplementation(std::shared_ptr<CDataSink> sink) : sink(sink) {}
+
+    void HandleSpecial(std::ostream &os, const std::string &value)
+    {
+        for (char ch : value)
+        {
+            switch (ch)
+            {
+                case '&': os << "&amp;"; break;
+                case '<': os << "&lt;"; break;
+                case '>': os << "&gt;"; break;
+                case '\"': os << "&quot;"; break;
+                case '\'': os << "&apos;"; break;
+                default: os << ch; break;
+            }
+        }
+    }
+
+    void StartElement(const std::string &name, const std::vector<SXMLEntity::TAttribute> &attributes)
+    {
+        std::stringstream ss;
+        ss << '<';
+        HandleSpecial(ss, name);
+        for (const auto &attr : attributes)
+        {
+            ss << ' ';
+            HandleSpecial(ss, attr.first);
+            ss << "=\"";
+            HandleSpecial(ss, attr.second);
+            ss << '\"';
+        }
+        ss << '>';
+        std::string temp = ss.str();
+        sink->Write(std::vector<char>(temp.begin(), temp.end()));
+    }
+
+    void EndElement(const std::string &name)
+    {
+        std::stringstream ss;
+        ss << "</";
+        HandleSpecial(ss, name);
+        ss << '>';
+        std::string temp = ss.str();
+        sink->Write(std::vector<char>(temp.begin(), temp.end()));
+    }
+
+    void CompleteElement(const std::string &name, const std::vector<SXMLEntity::TAttribute> &attributes)
+    {
+        std::stringstream ss;
+        ss << '<';
+        HandleSpecial(ss, name);
+        for (const auto &attr : attributes)
+        {
+            ss << ' ';
+            HandleSpecial(ss, attr.first);
+            ss << "=\"";
+            HandleSpecial(ss, attr.second);
+            ss << '\"';
+        }
+        ss << "/>";
+        std::string temp = ss.str();
+        sink->Write(std::vector<char>(temp.begin(), temp.end()));
+    }
+
+    void CharData(const std::string &data)
+    {
+        std::stringstream ss;
+        HandleSpecial(ss, data);
+        std::string temp = ss.str();
+        sink->Write(std::vector<char>(temp.begin(), temp.end()));
+    }
 };
 
 CXMLWriter::CXMLWriter(std::shared_ptr<CDataSink> sink)
@@ -30,69 +96,37 @@ CXMLWriter::~CXMLWriter() = default;
 
 
 //----------------------------------------------------------------------------
-// Writes out the entity to the output stream
-bool CXMLWriter::WriteEntity(const SXMLEntity &entity)
-{
-    // Helper lambda to append string to vector<char>
-    std::vector<char> data;
-    auto appendToData = [&data](const std::string& str) 
-    {
-        data.insert(data.end(), str.begin(), str.end());
-    };
-
-    // Start element
-    if (entity.DType == SXMLEntity::EType::StartElement) 
-    {
-        appendToData("<" + entity.DNameData);
-        for (const auto &attr : entity.DAttributes) 
-        { appendToData(" " + attr.first + "=\"" + attr.second + "\""); }
-        appendToData(">");
-        DImplementation->OpenedElements.push_back(entity.DNameData);
-    }
-
-    // End element
-    else if (entity.DType == SXMLEntity::EType::EndElement) 
-    {
-        if (!DImplementation->OpenedElements.empty() && DImplementation->OpenedElements.back() == entity.DNameData)
-        {
-            DImplementation->OpenedElements.pop_back();
-        }
-        appendToData("</" + entity.DNameData + ">");
-    }
-
-    // Complete element, write opening + closing tag
-    else if (entity.DType == SXMLEntity::EType::CompleteElement) 
-    {
-        appendToData("<" + entity.DNameData);
-        for (const auto &attr : entity.DAttributes) 
-        {
-            appendToData(" " + attr.first + "=\"" + attr.second + "\"");
-        }
-        appendToData("/>");
-    }
-
-    // Write the vector<char> to the sink
-    DImplementation->sink->Write(data);
-    return true;
-}
-
-
-//----------------------------------------------------------------------------
 // Outputs all end elements for those that have been started
 bool CXMLWriter::Flush() 
 {
-    // Iterate in reverse to close elements in the correct order
-    while (!DImplementation->OpenedElements.empty()) 
-    {
-        // Retrieve most recently opened element
-        std::string elementName = DImplementation->OpenedElements.back();
-        DImplementation->OpenedElements.pop_back();
+    // Not needed for direct case based stream appending (Always Return True)
+    return true;
+}
 
-        // Final closing tag
-        std::vector<char> data;
-        std::string closingTag = "</" + elementName + ">";
-        data.insert(data.end(), closingTag.begin(), closingTag.end());
-        DImplementation->sink->Write(data);
+//----------------------------------------------------------------------------
+// Writes out the entity to the output stream
+bool CXMLWriter::WriteEntity(const SXMLEntity &entity)
+{
+    switch (entity.DType)
+    {
+        // Calls StartElement()
+        case SXMLEntity::EType::StartElement:
+            DImplementation->StartElement(entity.DNameData, entity.DAttributes); break;
+
+        // Calls EndElement()
+        case SXMLEntity::EType::EndElement:
+            DImplementation->EndElement(entity.DNameData); break;
+
+        // Calls CompleteElement()
+        case SXMLEntity::EType::CompleteElement:
+            DImplementation->CompleteElement(entity.DNameData, entity.DAttributes); break;
+
+        // Calls CharData()
+        case SXMLEntity::EType::CharData:
+            DImplementation->CharData(entity.DNameData); break;
+
+        // No Data To Write
+        default: return false; 
     }
 
     return true;

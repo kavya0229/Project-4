@@ -30,16 +30,21 @@ struct SXMLEntity{
         return std::string();
     };
     
-    bool SetAttribute(const std::string &name, const std::string &value){
-        if(name.empty()){
+    bool SetAttribute(const std::string &name, const std::string &value)
+    {
+        if(name.empty())
+        {
             return false;   
         }
-        for(std::vector< TAttribute >::size_type Index = 0; Index < DAttributes.size(); Index++){
+
+        for(std::vector< TAttribute >::size_type Index = 0; Index < DAttributes.size(); Index++)
+        {
             if(std::get<0>(DAttributes[Index]) == name){
                 DAttributes[Index] = std::make_pair(name,value);
                 return true;
             }
         }
+        
         DAttributes.push_back(std::make_pair(name,value));
         return true;
     };
