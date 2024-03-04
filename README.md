@@ -1,7 +1,7 @@
 # Project 4
 # ECS 034
 # Student 1: Felipe Gutierrez (919406096)
-# Student 2: Kavya Sasikumar ()
+# Student 2: Kavya Sasikumar (921417581)
 
 
 ## Overview
